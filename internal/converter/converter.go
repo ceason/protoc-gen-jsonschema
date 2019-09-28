@@ -3,6 +3,7 @@ package converter
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/chrusty/protoc-gen-jsonschema/pbplugin"
 	"io"
 	"io/ioutil"
 	"path"
@@ -17,12 +18,12 @@ import (
 
 // Converter is everything you need to convert protos to JSONSchemas:
 type Converter struct {
-	AllowNullValues              bool
-	DisallowAdditionalProperties bool
-	DisallowBigIntsAsStrings     bool
-	UseProtoAndJSONFieldnames    bool
+	AllowNullValues              bool `pbplugin:"Allow NULL values (by default, JSONSchemas will reject NULL values unless we explicitly allow them)"`
+	DisallowAdditionalProperties bool `pbplugin:"Disallow additional properties (JSONSchemas won't validate JSON containing extra parameters)"`
+	DisallowBigIntsAsStrings     bool `pbplugin:"Disallow permissive validation of big-integers as strings (eg scientific notation)"`
+	UseProtoAndJSONFieldnames    bool `pbplugin:"???"`
 	logger                       *logrus.Logger
-	sourceInfo                   *sourceCodeInfo
+	sourceInfo                   pbplugin.SourceInfo
 }
 
 // New returns a configured *Converter:
@@ -184,7 +185,7 @@ func (c *Converter) convert(req *plugin.CodeGeneratorRequest) (*plugin.CodeGener
 		generateTargets[file] = true
 	}
 
-	c.sourceInfo = newSourceCodeInfo(req.GetProtoFile())
+	c.sourceInfo = pbplugin.NewSourceInfo(req.GetProtoFile())
 	res := &plugin.CodeGeneratorResponse{}
 	for _, file := range req.GetProtoFile() {
 		for _, msg := range file.GetMessageType() {

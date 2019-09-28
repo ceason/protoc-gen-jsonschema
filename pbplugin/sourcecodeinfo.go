@@ -1,4 +1,4 @@
-package converter
+package pbplugin
 
 import (
 	"github.com/golang/protobuf/proto"
@@ -21,6 +21,12 @@ type sourceCodeInfo struct {
 	lookup map[proto.Message]*descriptor.SourceCodeInfo_Location
 }
 
+type SourceInfo interface {
+	GetMessage(m *descriptor.DescriptorProto) *descriptor.SourceCodeInfo_Location
+	GetField(m *descriptor.FieldDescriptorProto) *descriptor.SourceCodeInfo_Location
+	GetEnum(m *descriptor.EnumDescriptorProto) *descriptor.SourceCodeInfo_Location
+}
+
 func (s sourceCodeInfo) GetMessage(m *descriptor.DescriptorProto) *descriptor.SourceCodeInfo_Location {
 	return s.lookup[m]
 }
@@ -33,11 +39,7 @@ func (s sourceCodeInfo) GetEnum(e *descriptor.EnumDescriptorProto) *descriptor.S
 	return s.lookup[e]
 }
 
-func (s sourceCodeInfo) GetEnumValue(e *descriptor.EnumValueDescriptorProto) *descriptor.SourceCodeInfo_Location {
-	return s.lookup[e]
-}
-
-func newSourceCodeInfo(fs []*descriptor.FileDescriptorProto) *sourceCodeInfo {
+func NewSourceInfo(fs []*descriptor.FileDescriptorProto) SourceInfo {
 	// For each source location in the provided files
 	// - resolve the (annoyingly) encoded path to its message/field/service/enum/etc definition
 	// - store the source info by its resolved definition
