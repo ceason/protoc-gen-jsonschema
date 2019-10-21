@@ -18,10 +18,10 @@ import (
 
 // Converter is everything you need to convert protos to JSONSchemas:
 type Converter struct {
-	AllowNullValues              bool `pbplugin:"Allow NULL values (by default, JSONSchemas will reject NULL values unless we explicitly allow them)"`
-	DisallowAdditionalProperties bool `pbplugin:"Disallow additional properties (JSONSchemas won't validate JSON containing extra parameters)"`
-	DisallowBigIntsAsStrings     bool `pbplugin:"Disallow permissive validation of big-integers as strings (eg scientific notation)"`
-	UseProtoAndJSONFieldnames    bool `pbplugin:"???"`
+	AllowNullValues              bool
+	DisallowAdditionalProperties bool
+	DisallowBigIntsAsStrings     bool
+	UseProtoAndJSONFieldnames    bool
 	logger                       *logrus.Logger
 	sourceInfo                   pbplugin.SourceInfo
 }

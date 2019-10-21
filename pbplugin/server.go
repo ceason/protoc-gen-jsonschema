@@ -4,24 +4,39 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	plugin_go "github.com/golang/protobuf/protoc-gen-go/plugin"
-	"html/template"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
-	"strings"
 )
 
-type Handler interface {
-	Handle(req *plugin_go.CodeGeneratorRequest) (*plugin_go.CodeGeneratorResponse, error)
+type CodeGenerator func(req *plugin_go.CodeGeneratorRequest) (files []*plugin_go.CodeGeneratorResponse_File, err error)
+
+type codeGeneratorError struct {
+	error
 }
 
-func Serve(handler Handler) error {
+// This should be used to indicate errors in .proto files which prevent the
+// code generator from generating correct code.
+func Errorf(format string, a ...interface{}) error {
+	return codeGeneratorError{fmt.Errorf(format, a...)}
+}
+
+func Serve(fn CodeGenerator) {
 	// Print usage if the plugin is not being invoked properly.
 	stat, _ := os.Stdin.Stat()
 	if !((stat.Mode() & os.ModeCharDevice) == 0) {
-		return printUsage(os.Stderr, handler)
+		printUsage(os.Stderr)
+		os.Exit(2)
 	}
+	// Serve request & output any errors.
+	err := fn.serve(os.Stdin, os.Stdout)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 
+func (fn CodeGenerator) serve(r io.Reader, w io.Writer) error {
 	// Read request from STDIN, pass it to the handler, then write response to STDOUT.
 	input, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
@@ -32,58 +47,28 @@ func Serve(handler Handler) error {
 	if err != nil {
 		return fmt.Errorf("could not read codegen request from stdin: %s", err.Error())
 	}
-	err = unmarshalOptions(req.GetParameter(), handler)
+	resError := ""
+	files, err := fn(req)
 	if err != nil {
-		// todo: figure out which errors should go to codegen response, vs which should be returned to caller??
-		return err
-	}
-	res, err := handler.Handle(req)
-	if err != nil {
-		errMsg := err.Error()
-		res = &plugin_go.CodeGeneratorResponse{
-			Error: &errMsg,
+		switch err.(type) {
+		case codeGeneratorError:
+			resError = err.Error()
+			err = nil
+		default:
+			return err
 		}
+	}
+	res := &plugin_go.CodeGeneratorResponse{
+		Error: &resError,
+		File:  files,
 	}
 	bytes, err := proto.Marshal(res)
 	if err != nil {
 		return fmt.Errorf("could not write serialized response: %s", err.Error())
 	}
-	_, err = os.Stdout.Write(bytes)
+	_, err = w.Write(bytes)
 	if err != nil {
 		return fmt.Errorf("could not write serialized response: %s", err.Error())
-	}
-	return nil
-}
-
-func printUsage(w io.Writer, h Handler) error {
-	options, err := getOptionsFromTags(h)
-	if err != nil {
-		return err
-	}
-	usage := struct {
-		PluginName      string
-		Options         []option
-		OptionDelimiter string
-	}{}
-	usage.PluginName = strings.Split(os.Args[0], "protoc-gen-")[1]
-	usage.Options = options
-	usage.OptionDelimiter = OptionDelimiter
-
-	tmpl, err := template.New("usage").Parse(`This is a protoc plugin and should be invoked like:
-
-   protoc --{{.PluginName}}_out=[OPTION{{.OptionDelimiter}}OPTION...:]OUT_DIR [PROTOC_ARGS...]
-
-This plugin has the following options (for PROTOC_ARGS see 'protoc --help'):
-   {{range .Options}}
-     {{.Name}}        ({{.OptType}}) {{.Description}}
-   {{end}}
-`)
-	if err != nil {
-		return err
-	}
-	err = tmpl.Execute(w, usage)
-	if err != nil {
-		return err
 	}
 	return nil
 }
